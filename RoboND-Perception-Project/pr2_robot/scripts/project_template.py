@@ -46,7 +46,7 @@ def send_to_yaml(yaml_filename, dict_list):
     data_dict = {"object_list": dict_list}
     with open(yaml_filename, 'a+') as outfile:
         yaml.dump(data_dict, outfile, default_flow_style=False)
-    print("Yaml filed")
+
 
 # Callback function for your Point Cloud Subscriber
 def pcl_callback(pcl_msg):
@@ -180,7 +180,8 @@ def pcl_callback(pcl_msg):
         do.label = label
         do.cloud = ros_cloud
         detected_objects.append(do)
-
+        
+    rospy.loginfo('Detected {} objects: {}'.format(len(detected_objects_labels), detected_objects_labels))
     
     # Create new cloud containing all clusters, each with a unique color
     cluster_cloud = pcl.PointCloud_PointXYZRGB()
@@ -205,7 +206,7 @@ def pcl_callback(pcl_msg):
 # function to load parameters and request PickPlace service
 def pr2_mover(detected_objects):
     # : Initialize variables
-    test_num=3
+    test_num=1
     
     yaml_obj_list = []
     ros_scene_num = Int32()
@@ -274,7 +275,7 @@ def pr2_mover(detected_objects):
 		        #item found, break from loop
 		        break 
 		        
-		print('Yamelled: %s' % ros_object_name.data)
+
 		# Wait for 'pick_place_routine' service to come up
 		rospy.wait_for_service('pick_place_routine')
 		
