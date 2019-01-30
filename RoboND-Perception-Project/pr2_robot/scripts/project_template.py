@@ -112,8 +112,8 @@ def pcl_callback(pcl_msg):
     # Euclidean clustering used cluster point clouds. 
     ec = white_cloud.make_EuclideanClusterExtraction()
     ec.set_ClusterTolerance(0.02)
-    ec.set_MinClusterSize(40)
-    ec.set_MaxClusterSize(900)
+    ec.set_MinClusterSize(100)
+    ec.set_MaxClusterSize(2500)
     ec.set_SearchMethod(tree)       # Search the k-d tree for clusters
     # Extract indices for each found cluster. This is a list of indices for
     #   each cluster (list of lists)
@@ -156,12 +156,9 @@ def pcl_callback(pcl_msg):
 
 
         # Extract histogram features
-        histogram_bins = 40
-        chists = compute_color_histograms(ros_cloud,
-                                          
-                                          using_hsv=True)
+        chists = compute_color_histograms(ros_cloud,nbins=128,using_hsv=True)
         normals = get_normals(ros_cloud)
-        nhists = compute_normal_histograms(normals)
+        nhists = compute_normal_histograms(normals, nbins=128)
         feature = np.concatenate((chists, nhists))
 
         # Make the prediction, retrieve the label for the result and add it
@@ -206,7 +203,7 @@ def pcl_callback(pcl_msg):
 # function to load parameters and request PickPlace service
 def pr2_mover(detected_objects):
     # : Initialize variables
-    test_num=1
+    test_num=3
     
     yaml_obj_list = []
     ros_scene_num = Int32()
@@ -224,74 +221,65 @@ def pr2_mover(detected_objects):
     centroids = [] #list of tuples x, y, z
     # : Loop through the yaml_pick list
     for object_params in object_list_param:
-	    object_name = object_params['name']
-	    object_group = object_params['group']
-	    ros_object_name.data = object_name
-	    box_pos = [0, 0, 0]
-	    centroid = [0, 0, 0]
-	    
-	    #identify associated item in the scene  
-	    for object in detected_objects:
-	        if object_name == object.label:
-	            #obtain centroid from object's cloud	
-		        points_array = ros_to_pcl(object.cloud).to_array()
-		        centroid_numpy = np.mean(points_array, axis=0)[:3]
-		        centroid = [np.asscalar(x) for x in centroid_numpy]
-		        #print(centroid)
-		        #print(type(centroid[1]))
+	object_name = object_params['name']
+        object_group = object_params['group']
+        ros_object_name.data = object_name
+        box_pos = [0, 0, 0]
+        centroid = [0, 0, 0]
+        
+        #identify associated item in the scene  
+        for object in detected_objects:
+	    if object_name == object.label:
+	        #obtain centroid from object's cloud	
+		    points_array = ros_to_pcl(object.cloud).to_array()
+		    centroid_numpy = np.mean(points_array, axis=0)[:3]
+		    centroid = [np.asscalar(x) for x in centroid_numpy]
+		    #print(centroid)
+		    #print(type(centroid[1]))
+	    	
+		    #object pick pose
+		    ros_pick_pose.position.x = centroid[0]
+		    ros_pick_pose.position.y = centroid[1]
+		    ros_pick_pose.position.z = centroid[2]
+	    	
+		    # 'place_pose' for the object
+		    if dropbox_list_param[0]['group'] == object_group:
+		        box_pos = dropbox_list_param[1]['position']
+		    else:
+		        box_pos=box_pos = dropbox_list_param[1]['position']
+	    	
+		    # Assign the dropbox (placing) pose
+		    ros_place_pos = Pose()
+		    ros_place_pos.position.x = box_pos[0]
+		    ros_place_pos.position.y = box_pos[1]
+		    ros_place_pos.position.z = box_pos[2]
+	    	
+		    #Assign the arm to be used for pick_place
+		    ros_arm_to_use = String()
+		    if object_group == 'green':
+		        #green bin: right arm
+		        arm_name = 'right'
+		    else:
+		        #red :left arm
+		        arm_name = 'left'
 		        
-		        #object pick pose
-		        ros_pick_pose.position.x = centroid[0]
-		        ros_pick_pose.position.y = centroid[1]
-		        ros_pick_pose.position.z = centroid[2]
-		        
-		        # 'place_pose' for the object
-		        if dropbox_list_param[0]['group'] == object_group:
-		            box_pos = dropbox_list_param[1]['position']
-		        else:
-		            box_pos=box_pos = dropbox_list_param[1]['position']
-		        
-		        # Assign the dropbox (placing) pose
-		        ros_place_pos = Pose()
-		        ros_place_pos.position.x = box_pos[0]
-		        ros_place_pos.position.y = box_pos[1]
-		        ros_place_pos.position.z = box_pos[2]
-		        
-		        #Assign the arm to be used for pick_place
-		        ros_arm_to_use = String()
-		        if object_group == 'green':
-		            #green bin: right arm
-		            arm_name = 'right'
-		        else:
-		            #red :left arm
-		            arm_name = 'left'
-		            
-		        ros_arm_to_use.data=arm_name
-		        #: Create a list of dictionaries
-		        yaml_obj=make_yaml_dict(ros_scene_num, ros_arm_to_use,
-		                                ros_object_name, ros_pick_pose,
-		                                ros_place_pos)
-		        yaml_obj_list.append(yaml_obj)
-		        #item found, break from loop
-		        break 
+		    ros_arm_to_use.data=arm_name
+		    #: Create a list of dictionaries
+		    yaml_obj=make_yaml_dict(ros_scene_num, ros_arm_to_use,
+					    ros_object_name, ros_pick_pose,
+					    ros_place_pos)
+		    yaml_obj_list.append(yaml_obj)
+		    #item found, break from loop
+		    break 
 		        
 
-		# Wait for 'pick_place_routine' service to come up
-		rospy.wait_for_service('pick_place_routine')
-		
-		#try:
-        #    pick_place_routine = rospy.ServiceProxy('pick_place_routine', PickPlace)
-
-        #: Insert your message variables to be sent as a service request
-        #   resp = pick_place_routine(ros_scene_num, ros_object_name,
-        #                                 ros_arm_to_use, ros_pick_pose,
-        #                                 ros_place_pos)
-
-        #   print ("Response: ",resp.success)
-
-        #except rospy.ServiceException, e:
-        #   print("Service call failed: %s" % e)
-	    #   del detected_objects.object
+	# Wait for 'pick_place_routine' service to come up
+	rospy.wait_for_service('pick_place_routine')
+	try:
+	    pick_place_routine = rospy.ServiceProxy('pick_place_routine', PickPlace)
+        except rospy.ServiceException, e:
+            print("Service call failed: %s" % e)
+            del detected_objects.object
     
     # : Output your request parameters into output yaml file
     send_to_yaml('output_%i.yaml' % test_num, yaml_obj_list)
@@ -321,7 +309,7 @@ if __name__ == '__main__':
     pcl_table_pub = rospy.Publisher('/pcl_table', PointCloud2, queue_size=1)
 
     # Load model from disk
-    model = pickle.load(open('model_world1_rbf.sav', 'rb'))
+    model = pickle.load(open('model_world1_final_50.sav', 'rb'))
     clf = model['classifier']
     encoder = LabelEncoder()
     encoder.classes_ = model['classes']
