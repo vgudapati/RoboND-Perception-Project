@@ -9,7 +9,7 @@
 [img_world1_pcl_objects]: perception-images/world1_pcl_objects.png
 [img_world1_pcl_objects_cloud]: perception-images/world1_pcl_objects_cloud.png
 
-[img_world2_camera_glue]: perception-images/world2_camera_glue.png
+[img_world2_camera]: perception-images/world2_camera.png
 [img_world2_points_glue]: perception-images/world2_points_glue.png
 [img_world2_pcl_table_glue]: perception-images/world2_pcl_table_glue.png
 [img_world2_pcl_objects]: perception-images/world2_pcl_objects.png
@@ -272,8 +272,6 @@ The following is the percentage result.
     world3: 6/8(75%)
 
 The output_(1/2/3).yamml files are present in the main repository
-
-
 
 As mentioned earlier, for capturing the features and training I have used  pr2_train_svm_world1.py and pr2_capture_features_world1.py from sensorstick/scripts from the repo. 
 
