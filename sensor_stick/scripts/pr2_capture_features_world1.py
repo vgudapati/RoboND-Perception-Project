@@ -42,7 +42,7 @@ if __name__ == '__main__':
     for model_name in models:
         spawn_model(model_name)
 
-        for i in range(100):
+        for i in range(50):
             # make five attempts to get a valid a point cloud then give up
             sample_was_good = False
             try_count = 0
@@ -58,14 +58,13 @@ if __name__ == '__main__':
                     sample_was_good = True
 
             # Extract histogram features
-            chists = compute_color_histograms(sample_cloud, using_hsv=True)
+            chists = compute_color_histograms(sample_cloud, nbins = 128, using_hsv=True)
             normals = get_normals(sample_cloud)
-            nhists = compute_normal_histograms(normals)
+            nhists = compute_normal_histograms(normals, nbins = 128)
             feature = np.concatenate((chists, nhists))
             labeled_features.append([feature, model_name])
 
         delete_model()
 
 
-    pickle.dump(labeled_features, open('training_set_world1_100.sav', 'wb'))
-
+    pickle.dump(labeled_features, open('training_set_world1_50.sav', 'wb'))
