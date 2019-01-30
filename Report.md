@@ -25,7 +25,11 @@
 [img_world3_points]: perception-images/world3_points.png
 [img_world3_pcl_table]: perception-images/world3_pcl_table.png
 [img_world3_pcl_objects]: perception-images/world3_pcl_objects.png
-[img_world3_pcl_objects_cloud]: perception-images/world3_pcl_objects_cloud.png
+[img_world3_pcl_objects_cloud]: perception-images/wordl3_pcl_pbjects_cloud.png
+
+[cmwn]: perception-images/confusion_matrix_with_normalization.png
+[cmwon]: perception-images/confusion_matrix_without_normalization.png
+
 
 
 
@@ -50,6 +54,8 @@ The steps followed to implement the project are as follows.
     - [Table segmentation](#table_segmentation)
     - [Clustering](#clustering)
     - [Object detection](#object_detection)
+      -[Capture Features](#capture_features)
+      -[Train the model](#train_model)
     - [Output to .yaml files](#yaml_files)
 
 ##
@@ -88,7 +94,7 @@ The following is the code to create a point cloud and down sample the images com
     vox.set_leaf_size(LEAF_SIZE, LEAF_SIZE, LEAF_SIZE)
     cloud_filtered = vox.filter()
 
-### Filtering <a id='point_cloud_creation'></a>
+### Filtering <a id='filtering'></a>
 
 To improve the quality of the point cloud data, we apply some filters. I used passthrough filers. The code to do so is;
 
@@ -117,4 +123,171 @@ After creating and filtering the following are the how the objects looks like.
 
 ### Table Segmentation <a id='table_segmentation'></a>
 
+I used RASNAC plane segmentation to separate out each of the objects from one another. The following is the code doing it. 
+
+    # Segmenting with RANSAC a Plane model :table
+    seg = cloud_filtered.make_segmenter()
+    seg.set_model_type(pcl.SACMODEL_PLANE)
+    seg.set_method_type(pcl.SAC_RANSAC)
+    max_distance = 0.01
+    seg.set_distance_threshold(max_distance)
+    inliers, coefficients = seg.segment()
+
+    # Extract inliers and outliers: table and objects
+    cloud_table = cloud_filtered.extract(inliers, negative=False)
+    cloud_objects = cloud_filtered.extract(inliers, negative=True)
+    
+After segmentation the table and the objects are separated. The following are the separated images for table. 
+
+![IMG8][img_world1_pcl_table]
+![IMG9][img_world2_pcl_table_glue]
+![IMG10][img_world3_pcl_table]
+
+### Clustering <a id='clustering'></a>
+
+Finally used Euclidean Clustering to distinguish the objects from one another. The following is the code used.
+
+    # Euclidean Clustering
+    # Convert the xyzrgb cloud to only xyz, KDtree is only spatially dependent
+    white_cloud = XYZRGB_to_XYZ(cloud_objects)
+    #   PCL's euclidian clustering algorithims only takes Kdtrees
+    tree = white_cloud.make_kdtree()
+    # Euclidean clustering used cluster point clouds. 
+    ec = white_cloud.make_EuclideanClusterExtraction()
+    ec.set_ClusterTolerance(0.02)
+    ec.set_MinClusterSize(40)
+    ec.set_MaxClusterSize(900)
+    ec.set_SearchMethod(tree)       # Search the k-d tree for clusters
+    # Extract indices for each found cluster. This is a list of indices for
+    #   each cluster (list of lists)
+    cluster_indices = ec.Extract() # a [number of clusters][clouds] 
+    
+The images segmented and clustered are shown below. These correspond to the outliers in the segmentation step.
+
+![IMG11][img_world1_pcl_objects_cloud]
+![IMG12][img_world2_pcl_objects_cloud_glue]
+![IMG14][img_world3_pcl_objects_cloud]
+
+### Object Detection <a id='object_detection'></a>
+
+Object detection involves two steps. 
+
+- Capture the features
+- Training the model
+
+#### Capture the features <a id='capture_features'></a>
+
+During the excercises, we directly ran the following commands to generate the features.
+
+First, launch the training simulator with:
+    $ roslaunch sensor_stick training.launch
+Then to capture features:
+    $ rosrun sensor_stick pr2_capture_features_world1.py
+
+The code that extracts the features come from the capture_features.py where we will use compute_color_histograms and compute_normal_histograms functions
+
+    # Extract histogram features
+    chists = compute_color_histograms(sample_cloud, using_hsv=True)
+    normals = get_normals(sample_cloud)
+    nhists = compute_normal_histograms(normals)
+    feature = np.concatenate((chists, nhists))
+    labeled_features.append([feature, model_name])
+
+But during the actual project, we needed a master list of all the objects. So, by looking into pick_list yaml files under /pr2_robot/config/ i made the master list. Then launched the above commands. Also, i tried with various(random) positions. When the number is low, the accuracy sufferred and when the number is high, the accuracy improved. I trained with 100 parameters.
+
+#### Train the model <a id='train_model'></a>
+
+Training the model is done using the Support Vector Machines(SVM) model carrying on the work from the lessons. I played around with all the hyper parameters in SVC. But eventually reverted back to the simple linear kernel classifier. I didn't see much improvement when i tried either poly or rbf kernels in this particular case. 
+
+For training i used the script pr2_train_svm_world1.py from sensorstick/scripts.
+
+As mentioned in the lessons, I increased the number of poses for objects to 100, set using_hsv to True
+
+The following is the output from training the network.
+
+    robond@udacity:~/catkin_ws$ rosrun sensor_stick pr2_train_svm_world1.py
+    Features in Training Set: 900
+    Invalid Features in Training set: 3
+    SVC(C=1.0, cache_size=200, class_weight=None, coef0=0.0,
+      decision_function_shape='ovr', degree=3, gamma='auto_deprecated',
+      kernel='linear', max_iter=-1, probability=False, random_state=None,
+      shrinking=True, tol=0.001, verbose=False)
+    Scores: [ 0.88333333  0.88888889  0.89385475  0.89944134  0.88826816]
+    Accuracy: 0.89 (+/- 0.01)
+    accuracy score: 0.890746934225
+    robond@udacity:~/catkin_ws$ 
+
+The following are the confusion matrices with and without normalization
+
+![IMG17][cmwn]
+
+
+![IMG18][cmwon]
+
+
+
+
+
+### Output to yaml files <a id='output_to_yaml'></a>
+
+The last step is to generate the yaml files, which are used by the robot to choose the target to pick and place, should we choose to implement the challenge. But i have not chosen to do the challenge at this point in time but to generate the yaml files as it is the requirement for the project
+
+In order to generate the yaml files, we do the following.
+
+  - Read the paramters
+  - Look through the yaml pick list and check if the detected object is in the pick list. 
+  - If so, calculate the centroid of each object.
+  
+Then we create a yaml_dict using the function make_yaml_dict and then write to a file using send_to_yaml function.
+
+    def make_yaml_dict(test_scene_num, arm_name, object_name, pick_pose, place_pose):
+    yaml_dict = {}
+    yaml_dict["test_scene_num"] = test_scene_num.data
+    yaml_dict["arm_name"]  = arm_name.data
+    yaml_dict["object_name"] = object_name.data
+    yaml_dict["pick_pose"] = message_converter.convert_ros_message_to_dictionary(pick_pose)
+    yaml_dict["place_pose"] = message_converter.convert_ros_message_to_dictionary(place_pose)
+    return yaml_dict
+    
+    def send_to_yaml(yaml_filename, dict_list):
+    data_dict = {"object_list": dict_list}
+    with open(yaml_filename, 'a+') as outfile:
+        yaml.dump(data_dict, outfile, default_flow_style=False)
+
+
+### Testing the Project <a id='test_project'></a>
+
+To test with the project, first run:
+
+$ roslaunch pr2_robot pick_place_project.launch
+and then,
+
+$ rosrun pr2_robot project_template.py
+
+## Observations and Results <a id='observations_results'></a>
+
+The recognition for all three tasks is done successfully.
+
+The following is the percentage result.
+
+World1: 3/3 (100%)
+world2: 4/5(80%) / 5/5(100%)
+world3: 7/8(87.5%) / 8/8 (100%)
+
+The output_(1/2/3).yamml files are present in the main repository
+
+As mentioned earlier, for capturing the features and training I have used  pr2_train_svm_world1.py and pr2_capture_features_world1.py from sensorstick/scripts from the repo. 
+
+All the images displayed above at the beginning are captured during testing so the tags are diaplayed as well.
+
+What did work at times is that the model found it diffcult to recognize the glue all the time. An example in world2 where there is no glue and identified as soap. It's not always soap as well. Please take a look below for an example. 
+
+![IMG15][img_world2_pcl_objects_cloud_no_glue]
+
+# Future work
+
+There are many ways this project can be improved. Some of the obvious ways i can take this forward are:
+  - Take up the challenge part of the project
+  - Experiment with other models or algorithms such as DBSCAN
+  - Debug and finetune the model to make sure it always performs 100% and als research why glue is not always identified as glue.
 
