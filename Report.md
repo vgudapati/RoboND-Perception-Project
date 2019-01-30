@@ -74,8 +74,7 @@ subscribed to the /pr2/world/points topic. The following is the code.
 The following is a sample of the image coming from camera in each of the worlds. 
 
 ![IMG2][img_world1_camera]
-![IMG3][img_world2_camera_glue]
-![IMG4][img_world3_camera]
+
 
 ## Perception pipeline <a id='perception_pipeline'></a>
 
@@ -118,8 +117,7 @@ To improve the quality of the point cloud data, we apply some filters. I used pa
 After creating and filtering the following are the how the objects looks like.
 
 ![IMG5][img_world1_pcl_objects]
-![IMG6][img_world2_pcl_objects]
-![IMG7][img_world3_pcl_objects]
+
 
 ### Table Segmentation <a id='table_segmentation'></a>
 
@@ -140,8 +138,7 @@ I used RASNAC plane segmentation to separate out each of the objects from one an
 After segmentation the table and the objects are separated. The following are the separated images for table. 
 
 ![IMG8][img_world1_pcl_table]
-![IMG9][img_world2_pcl_table_glue]
-![IMG10][img_world3_pcl_table]
+
 
 ### Clustering <a id='clustering'></a>
 
@@ -165,8 +162,7 @@ Finally used Euclidean Clustering to distinguish the objects from one another. T
 The images segmented and clustered are shown below. These correspond to the outliers in the segmentation step.
 
 ![IMG11][img_world1_pcl_objects_cloud]
-![IMG12][img_world2_pcl_objects_cloud_glue]
-![IMG14][img_world3_pcl_objects_cloud]
+
 
 ### Object Detection <a id='object_detection'></a>
 
@@ -193,7 +189,7 @@ The code that extracts the features come from the capture_features.py where we w
     feature = np.concatenate((chists, nhists))
     labeled_features.append([feature, model_name])
 
-But during the actual project, we needed a master list of all the objects. So, by looking into pick_list yaml files under /pr2_robot/config/ i made the master list. Then launched the above commands. Also, i tried with various(random) positions. When the number is low, the accuracy sufferred and when the number is high, the accuracy improved. I trained with 100 parameters.
+But during the actual project, we needed a master list of all the objects. So, by looking into pick_list yaml files under /pr2_robot/config/ i made the master list. Then launched the above commands. Also, i tried with various(random) positions. When the number is low, the accuracy sufferred and when the number is high, the accuracy improved. I trained with 50 parameters finally to achieve 86.88 accuracy score. I tried with 20/30/50 and as the number went up the accuracy improved.
 
 #### Train the model <a id='train_model'></a>
 
@@ -201,21 +197,22 @@ Training the model is done using the Support Vector Machines(SVM) model carrying
 
 For training i used the script pr2_train_svm_world1.py from sensorstick/scripts.
 
-As mentioned in the lessons, I increased the number of poses for objects to 100, set using_hsv to True
+As mentioned in the lessons, I increased the number of poses for objects to 50 currently (though i tried with different numbers and other hyper parameters), set using_hsv to True. Even the kernel i tried rbf and poly but linear was better in the test i did. 
 
 The following is the output from training the network.
 
     robond@udacity:~/catkin_ws$ rosrun sensor_stick pr2_train_svm_world1.py
-    Features in Training Set: 900
-    Invalid Features in Training set: 3
+    Features in Training Set: 450
+    Invalid Features in Training set: 0
     SVC(C=1.0, cache_size=200, class_weight=None, coef0=0.0,
       decision_function_shape='ovr', degree=3, gamma='auto_deprecated',
       kernel='linear', max_iter=-1, probability=False, random_state=None,
       shrinking=True, tol=0.001, verbose=False)
-    Scores: [ 0.88333333  0.88888889  0.89385475  0.89944134  0.88826816]
-    Accuracy: 0.89 (+/- 0.01)
-    accuracy score: 0.890746934225
+    Scores: [ 0.81111111  0.9         0.86666667  0.87777778  0.88888889]
+    Accuracy: 0.87 (+/- 0.06)
+    accuracy score: 0.868888888889
     robond@udacity:~/catkin_ws$ 
+
 
 The following are the confusion matrices with and without normalization
 
@@ -270,19 +267,25 @@ The recognition for all three tasks is done successfully.
 
 The following is the percentage result.
 
-World1: 3/3 (100%)
-world2: 4/5(80%) / 5/5(100%)
-world3: 7/8(87.5%) / 8/8 (100%)
+    World1: 3/3 (100%)
+    world2: 4/5(80%)
+    world3: 6/8(75%)
 
 The output_(1/2/3).yamml files are present in the main repository
+
+
 
 As mentioned earlier, for capturing the features and training I have used  pr2_train_svm_world1.py and pr2_capture_features_world1.py from sensorstick/scripts from the repo. 
 
 All the images displayed above at the beginning are captured during testing so the tags are diaplayed as well.
 
-What did work at times is that the model found it diffcult to recognize the glue all the time. An example in world2 where there is no glue and identified as soap. It's not always soap as well. Please take a look below for an example. 
+What did work at times is that the model found it diffcult to recognize some objects always missing on world2 and world3. This definitely needs improvement and ill work on them. 
 
-![IMG15][img_world2_pcl_objects_cloud_no_glue]
+Here are the predictions
+
+![IMG21][img_world1_camera]
+![IMG22][img_world2_camera]
+![IMG23][img_world3_camera]
 
 # Future work
 
